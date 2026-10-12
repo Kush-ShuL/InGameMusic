@@ -43,8 +43,9 @@ public final class MusicScreen extends Screen {
         left = (width - drawnWidth) / 2; top = (height - drawnHeight) / 2;
     }
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, width, height, 0x48070d1c);
-        InGameMusic.renderer().draw(view.scene(localX(mouseX), localY(mouseY)), context, left, top, uiScale);
+        if (view.app.glassStyle.enabled()) context.applyBlur();
+        context.fill(0, 0, width, height, view.app.glassStyle.enabled() ? 0x20070d1c : 0x48070d1c);
+        InGameMusic.renderer().draw(view.scene(localX(mouseX), localY(mouseY)), context, left, top, uiScale, view.app.glassStyle.enabled());
         syncInput();
     }
     @Override public void renderBackground(DrawContext context, int x, int y, float delta) { }
@@ -65,5 +66,5 @@ public final class MusicScreen extends Screen {
     }
     @Override public boolean shouldPause() { return false; }
     @Override public void close() { MinecraftClient.getInstance().setScreen(parent); }
-    @Override public void removed() { if (inputMethod != null) inputMethod.close(); view.dispose(); }
+    @Override public void removed() { if (inputMethod != null) inputMethod.close(); view.dispose(); InGameMusic.renderer().releaseGlass(); }
 }

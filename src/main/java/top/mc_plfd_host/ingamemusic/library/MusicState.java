@@ -11,6 +11,10 @@ public final class MusicState {
     public boolean hud = true;
     public boolean hudCompact = false;
     public boolean generatedCovers = false;
+    public boolean liquidGlass = false;
+    public double glassBlur = 6, glassRefraction = 1.35;
+    public boolean glassRespectBackgroundBlur = true;
+    public double glassMaskOpacity = 0;
     public boolean simpleVoiceChatRedirect = false;
     public double svcGain = .35;
     public double hudX = .02, hudY = .08;

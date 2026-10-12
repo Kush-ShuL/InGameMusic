@@ -1,6 +1,6 @@
 # Third-party components
 
-InGame Music's own code is MIT licensed. Dependencies keep their respective licenses.
+InGame Music's own code is All Rights Reserved (ARR). Dependencies keep their respective licenses.
 All audio decoding is Java code. No FFmpeg, JNI codec, external executable or runtime download is used.
 Java Sound uses the Java runtime's platform audio output implementation.
 
@@ -16,7 +16,12 @@ Java Sound uses the Java runtime's platform audio output implementation.
 | Vorbis Java Core | 0.8 | Apache-2.0 | [Maven sources](https://repo.maven.apache.org/maven2/org/gagravarr/vorbis-java-core/0.8/vorbis-java-core-0.8-sources.jar) |
 | jaudiotagger | 3.0.1 | LGPL-2.1 | [Maven sources](https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar) |
 | Noto Sans SC | regular instance of Google Fonts variable font | SIL OFL 1.1 | [Upstream](https://github.com/google/fonts/tree/main/ofl/notosanssc), license in `src/main/resources/licenses/NotoSansSC-OFL.txt` |
+| Noto Emoji | Google Fonts revision `bd8f81ddb5c7`, unmodified variable TrueType font | SIL OFL 1.1 | [Upstream](https://github.com/google/fonts/tree/bd8f81ddb5c74d5c8897b36ad88b440266245103/ofl/notoemoji), license in `src/main/resources/licenses/NotoEmoji-OFL.txt` |
 
 Java dependencies are included as separate, unmodified nested JARs in `META-INF/jars/`, with no shading or relocation. Their original sources and POM license declarations can be fetched using `python3 tools/collect_dependency_sources.py`. Distribution bundles include this source archive. To replace a library with a compatible modified version, replace its nested JAR (preserving its generated Fabric metadata), or update its version in `build.gradle` and rebuild. Reverse engineering for debugging modifications to LGPL libraries is permitted under their licenses.
 
 Fabric Loader, Fabric API and Minecraft are provided by the game installation and are not bundled.
+
+The optional Simple Voice Chat integration compiles against `de.maxhenkel.voicechat:voicechat-api:2.6.13` (compile/test only). Neither this API nor Simple Voice Chat is bundled. When sharing is enabled, the installed Simple Voice Chat mod performs its own voice encoding and transport. Local file decoding remains entirely Java.
+
+Bundled `notoemoji.ttf` SHA-256: `de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551`. The font is included locally; no font download is performed at runtime.

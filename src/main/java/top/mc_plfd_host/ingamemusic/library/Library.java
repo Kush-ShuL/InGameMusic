@@ -24,6 +24,7 @@ public final class Library {
                 if (loaded == null || loaded.tracks == null || loaded.playlists == null || loaded.folders == null)
                     throw new IOException(tr("error.library_structure"));
                 state = loaded;
+                top.mc_plfd_host.ingamemusic.ui.GlassStyle.from(state).store(state);
                 state.tracks.removeIf(Objects::isNull);
                 state.playlists.removeIf(p -> p == null || p.id == null || p.name == null || p.tracks == null);
                 if (!Double.isFinite(state.volume)) state.volume = .65;
@@ -50,6 +51,7 @@ public final class Library {
         state.tracks = new ArrayList<>(byPath.values()); save();
     }
     public synchronized void save() throws IOException {
+        top.mc_plfd_host.ingamemusic.ui.GlassStyle.from(state).store(state);
         Path temporary = home.resolve("library.json.tmp");
         Files.writeString(temporary, JSON.toJson(state), StandardCharsets.UTF_8);
         try { Files.move(temporary, stateFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }

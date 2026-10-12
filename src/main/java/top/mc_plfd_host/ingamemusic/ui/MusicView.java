@@ -31,12 +31,13 @@ public final class MusicView {
     private TextEdit focus;
     private Dialog dialog;
     private String page = "library", playlist, inspected;
+    private String settingsTab = "appearance", focusedSlider = "";
     private int anchor = -1, fileAnchor = -1;
     private record Viewport(int x, int y, int w, int h, int rowHeight) {
         boolean contains(double px, double py) { return px >= x && px < x + w + 18 && py >= y && py < y + h; }
     }
     private static final Viewport LIBRARY = new Viewport(236, 208, 572, 378, 54);
-    private static final Viewport SIDEBAR = new Viewport(25, 296, 164, 272, 40);
+    private static final Viewport SIDEBAR = new Viewport(25, 296, 164, 250, 40);
     private static final Viewport FOLDERS = new Viewport(236, 188, 837, 396, 66);
     private static final Viewport BROWSER = new Viewport(236, 216, 837, 322, 46);
     private static final Viewport CHOOSER = new Viewport(365, 220, 390, 240, 48);
@@ -47,7 +48,8 @@ public final class MusicView {
     private final UiMotion motion = new UiMotion();
     private Hit pressedHit;
     private boolean pointerDown;
-    private long pressUntil;
+    private long pressUntil, rippleStart;
+    private double pressX, pressY;
     private boolean overlayLayer;
     private double mouseX = -1, mouseY = -1;
     private long lastClick;
@@ -78,10 +80,9 @@ public final class MusicView {
         motion.begin(frameTime);
         scrolling.values().forEach(state -> state.advance(elapsed));
         this.mouseX = mouseX; this.mouseY = mouseY; hits.clear(); viewports.clear(); hitClip = null; overlayLayer = false;
-        try (Canvas c = new Canvas(WIDTH, HEIGHT)) {
-            for (int i = 10; i > 0; i--) c.round(12 - i, 12 - i, WIDTH - 24 + i * 2, HEIGHT - 24 + i * 2, 24 + i, 0x06000000);
-            c.glass(10, 10, WIDTH - 20, HEIGHT - 20, 24, BG);
-            c.glass(20, 20, 186, 596, 20, 0xffedf2f6);
+        try (Canvas c = new Canvas(WIDTH, HEIGHT, app.glassStyle.enabled())) {
+            region(c, 20, 20, 186, 576, 0xffedf2f6);
+            region(c, 220, 20, 880, 82, BG);
             sidebar(c);
             if (page.equals("browser")) browser(c);
             else if (page.equals("folders")) folders(c);
@@ -89,12 +90,17 @@ public final class MusicView {
             else library(c);
             player(c);
             String notice = app.player.status() == AudioPlayer.Status.ERROR ? tr("error.playback", app.player.error()) : app.notice;
-            c.fit(notice, 236, 610, 11, app.player.status() == AudioPlayer.Status.ERROR ? DANGER : MUTED, 815);
+            c.fit(notice, 36, 625, 11, app.player.status() == AudioPlayer.Status.ERROR ? DANGER : MUTED, 1048);
             iconButton(c, "close", 1066, 28, 30, host::close);
             if (choosePlaylist) playlistChooser(c);
             if (dialog != null) dialog(c);
             return c.finish();
         }
+    }
+    /** Independent surfaces leave the game visible through the gutters. */
+    private void region(Canvas c, int x, int y, int width, int height, int tint) {
+        c.round(x, y + 3, width, height, 18, 0x18040d1c);
+        c.surface(x, y, width, height, 18, tint, app.glassStyle);
     }
     private void sidebar(Canvas c) {
         c.glass(32, 35, 36, 36, 12, ACCENT); c.icon("music", 39, 42, 22, BG);
@@ -115,8 +121,8 @@ public final class MusicView {
             hit(25, y, 164, 34, m -> switchLibrary(list.id));
         }
         endList(c, "sidebar", SIDEBAR, lists.size());
-        c.glass(27, 576, 161, 37, 13, SELECTED);
-        c.text(tr("brand.motto"), 41, 599, 11, ACCENT);
+        c.glass(27, 551, 161, 37, 13, SELECTED);
+        c.text(tr("brand.motto"), 41, 574, 11, ACCENT);
     }
     private void nav(Canvas c, String icon, String label, int y, boolean active, Runnable action) {
         boolean hover = hover(25, y, 164, 40);
@@ -125,6 +131,7 @@ public final class MusicView {
         c.round(25, y, 164, 40, 14, UiMotion.opacity(0x15187b70, warmth));
         double marker = motion.value("nav-active:" + icon, active);
         c.round(26, y + 11, 3, 18, 1.5, UiMotion.opacity(ACCENT, marker));
+        glassFeedback(c, 25, y, 164, 40, 14);
         c.icon(icon, 37, y + 10, 20, active ? ACCENT : MUTED); c.text(label, 68, y + 26, 14, active ? ACCENT : TEXT);
         hit(25, y, 164, 40, m -> action.run());
     }
@@ -146,6 +153,7 @@ public final class MusicView {
         return cachedTracks;
     }
     private void library(Canvas c) {
+        region(c, 220, 114, 602, 482, BG);
         List<Track> tracks = visible();
         String title = playlist == null ? tr("library.title") : app.state.playlists.stream().filter(p -> p.id.equals(playlist)).map(p -> p.name).findFirst().orElse(tr("playlist.generic"));
         c.fit(title, 236, 65, 27, TEXT, 310);
@@ -153,21 +161,21 @@ public final class MusicView {
         search.paint(c, 570, 35, 472, 38, tr("search.placeholder"), focus == search);
         hit(570, 35, 472, 38, m -> focus = search);
         if (selection.isEmpty()) {
-            button(c, tr("action.play_all"), 236, 110, 92, 36, true, () -> { if (!tracks.isEmpty()) app.play(tracks.getFirst(), tracks); });
-            button(c, tr("action.import_files"), 336, 110, 104, 36, false, () -> openBrowser(false));
-            button(c, tr("action.add_folder"), 448, 110, 104, 36, false, () -> openBrowser(true));
+            button(c, tr("action.play_all"), 236, 126, 92, 36, true, () -> { if (!tracks.isEmpty()) app.play(tracks.getFirst(), tracks); });
+            button(c, tr("action.import_files"), 336, 126, 104, 36, false, () -> openBrowser(false));
+            button(c, tr("action.add_folder"), 448, 126, 104, 36, false, () -> openBrowser(true));
             if (playlist != null) {
-                button(c, tr("action.rename_playlist"), 560, 110, 110, 36, false, this::renamePlaylist);
-                button(c, tr("action.delete_playlist"), 678, 110, 130, 36, false, this::deletePlaylist);
+                button(c, tr("action.rename_playlist"), 560, 126, 110, 36, false, this::renamePlaylist);
+                button(c, tr("action.delete_playlist"), 678, 126, 130, 36, false, this::deletePlaylist);
             }
-            c.text(tr("library.double_click"), 236, 170, 11, MUTED);
+            c.text(tr("library.double_click"), 236, 179, 11, MUTED);
         } else {
-            button(c, tr("action.add_to_playlist"), 236, 110, 104, 36, true, () -> { choosePlaylist = true; scrollState("chooser").reset(); focus = null; });
-            button(c, tr("action.rename"), 348, 110, 88, 36, false, this::renameFiles);
-            button(c, tr("action.remove"), 444, 110, 72, 36, false, this::removeSelected);
-            button(c, tr("action.delete_files"), 524, 110, 100, 36, false, this::deleteFiles);
-            button(c, tr("action.clear_selection"), 632, 110, 112, 36, false, selection::clear);
-            c.text(tr("selection.count", selection.size()), 236, 170, 11, ACCENT);
+            button(c, tr("action.add_to_playlist"), 236, 126, 104, 36, true, () -> { choosePlaylist = true; scrollState("chooser").reset(); focus = null; });
+            button(c, tr("action.rename"), 348, 126, 88, 36, false, this::renameFiles);
+            button(c, tr("action.remove"), 444, 126, 72, 36, false, this::removeSelected);
+            button(c, tr("action.delete_files"), 524, 126, 100, 36, false, this::deleteFiles);
+            button(c, tr("action.clear_selection"), 632, 126, 112, 36, false, selection::clear);
+            c.text(tr("selection.count", selection.size()), 236, 179, 11, ACCENT);
         }
         c.text(tr("column.track"), 276, 193, 11, MUTED);
         c.text(tr("column.album"), 566, 193, 11, MUTED); c.text(tr("column.duration"), 755, 193, 11, MUTED);
@@ -199,8 +207,7 @@ public final class MusicView {
     }
     private void details(Canvas c) {
         Track t = inspected == null ? app.player.track() : trackIndex.get(inspected);
-        c.round(830, 115, 266, 478, 19, 0x08040d1c);
-        c.glass(832, 110, 262, 478, 20, PANEL);
+        region(c, 834, 114, 266, 482, PANEL);
         c.text(t == null ? tr("details.empty_title") : tr("details.title"), 853, 140, 12, MUTED);
         c.cover(t == null ? null : covers.get(t, app.state.generatedCovers), 853, 157, 220, t == null ? 174 : t.album().hashCode());
         c.fit(t == null ? tr("details.empty_track") : t.title(), 853, 411, 18, TEXT, 220);
@@ -225,7 +232,7 @@ public final class MusicView {
         lastClick = now; lastPath = t.path();
     }
     private void player(Canvas c) {
-        c.glass(20, 626, WIDTH - 40, 78, 23, PANEL);
+        region(c, 20, 608, WIDTH - 40, 96, PANEL);
         Track t = app.player.track();
         c.cover(t == null ? null : covers.get(t, app.state.generatedCovers), 30, 642, 52, t == null ? 174 : t.album().hashCode());
         c.fit(t == null ? tr("player.empty") : t.title(), 96, 662, 14, TEXT, 221);
@@ -234,7 +241,8 @@ public final class MusicView {
         c.glass(420, 635, 44, 44, 22, ACCENT);
         double playHover = motion.value("play-hover", hover(420, 635, 44, 44));
         double playPress = motion.value("play-press", pressed(420, 635, 44, 44));
-        c.round(420, 635, 44, 44, 22, UiMotion.opacity(0x16092e29, Math.max(playHover * .55, playPress)));
+        c.round(420, 635, 44, 44, 22, UiMotion.opacity(app.glassStyle.enabled() ? 0x30ffffff : 0x16092e29, Math.max(playHover * .55, playPress)));
+        glassFeedback(c, 420, 635, 44, 44, 22);
         c.icon(isPlaying() ? "pause" : "play", 431, 646 + Math.round(playPress * 2), 22, BG); hit(420, 635, 44, 44, m -> app.toggle());
         iconButton(c, "next", 477, 641, 32, () -> app.next(false, false));
         button(c, app.modeLabel(), 532, 640, 94, 31, false, app::cycleMode);
@@ -260,6 +268,7 @@ public final class MusicView {
     }
     private boolean isPlaying() { return app.player.status() == AudioPlayer.Status.PLAYING || app.player.status() == AudioPlayer.Status.LOADING; }
     private void folders(Canvas c) {
+        region(c, 220, 114, 880, 482, BG);
         c.text(tr("nav.folders"), 236, 65, 27, TEXT);
         c.text(tr("folders.description"), 236, 94, 13, MUTED);
         button(c, tr("action.add_folder_plus"), 236, 122, 128, 37, true, () -> openBrowser(true));
@@ -277,43 +286,145 @@ public final class MusicView {
     }
     private void settings(Canvas c) {
         c.text(tr("settings.title"), 236, 65, 27, TEXT);
-        c.text(tr("settings.subtitle"), 236, 94, 13, MUTED);
-        c.glass(236, 122, 405, 134, 18, PANEL);
-        c.text(tr("settings.hud"), 258, 157, 18, TEXT);
-        c.fit(tr("settings.hud_description"), 258, 186, 12, MUTED, 360);
-        button(c, app.state.hud ? tr("option.on") : tr("option.off"), 258, 202, 110, 34, app.state.hud, () -> app.edit(tr("action.hud"), state -> state.hud = !state.hud));
-        button(c, tr("action.position"), 382, 202, 126, 34, false, host::editHud);
-        c.glass(659, 122, 414, 134, 18, PANEL);
-        c.text(tr("settings.hud_style"), 681, 157, 18, TEXT);
-        c.fit(tr("settings.hud_style_hint"), 681, 186, 12, MUTED, 370);
-        button(c, tr("option.hud_full"), 681, 202, 172, 34, !app.state.hudCompact, () -> app.edit(tr("action.hud_style"), state -> state.hudCompact = false));
-        button(c, tr("option.hud_compact"), 869, 202, 182, 34, app.state.hudCompact, () -> app.edit(tr("action.hud_style"), state -> state.hudCompact = true));
-        c.glass(236, 270, 837, 76, 18, PANEL);
-        c.text(tr("settings.generated_covers"), 258, 299, 17, TEXT);
-        c.fit(tr("settings.generated_covers_hint"), 258, 326, 12, MUTED, 625);
-        button(c, app.state.generatedCovers ? tr("option.on") : tr("option.off"), 927, 289, 124, 38, app.state.generatedCovers,
+        c.text(tr("settings.subtitle"), 236, 88, 12, MUTED);
+        String[] tabs = {"appearance", "playback", "voice", "keys"};
+        String[] labels = {tr("settings.tab.appearance"), tr("settings.tab.playback"), tr("settings.tab.voice"), tr("settings.tab.keys")};
+        for (int i = 0; i < tabs.length; i++) {
+            String tab = tabs[i];
+            button(c, labels[i], 220 + i * 224, 118, 208, 38, settingsTab.equals(tab), () -> {
+                finishAppearanceDrag(); settingsTab = tab; focusedSlider = "";
+            });
+        }
+        switch (settingsTab) {
+            case "playback" -> playbackSettings(c);
+            case "voice" -> voiceSettings(c);
+            case "keys" -> keySettings(c);
+            default -> appearanceSettings(c);
+        }
+    }
+    private void appearanceSettings(Canvas c) {
+        var style = app.glassStyle;
+        region(c, 220, 170, 552, 426, PANEL);
+        c.text(tr("settings.material"), 244, 205, 19, TEXT);
+        c.fit(tr("settings.material_hint"), 244, 228, 12, MUTED, 504);
+        button(c, tr("option.material_flat"), 244, 246, 244, 40, !style.enabled(), () -> changeGlassStyle(app.glassStyle.withEnabled(false)));
+        button(c, tr("option.material_glass"), 500, 246, 248, 40, style.enabled(), () -> changeGlassStyle(app.glassStyle.withEnabled(true)));
+        appearanceSlider(c, "glass-blur", tr("settings.glass_blur"), tr("settings.glass_blur_hint"), 318,
+                style.blur() / GlassStyle.MAX_BLUR, tr("settings.blur_value", String.format(Locale.ROOT, "%.1f", style.blur())), style.enabled());
+        appearanceSlider(c, "glass-refraction", tr("settings.glass_refraction"), tr("settings.glass_refraction_hint"), 404,
+                (style.refraction() - 1) / (GlassStyle.MAX_REFRACTION - 1), String.format(Locale.ROOT, "%.2f", style.refraction()), style.enabled());
+        appearanceSlider(c, "glass-mask", tr("settings.glass_mask"), tr("settings.glass_mask_hint"), 490,
+                1 - style.maskOpacity(), tr("settings.percent_value", (int) Math.round((1 - style.maskOpacity()) * 100)), style.enabled());
+        c.fit(tr(style.enabled() ? "settings.glass_live" : "settings.glass_disabled"), 244, 584, 12, MUTED, 504);
+
+        region(c, 784, 170, 316, 260, PANEL);
+        c.text(tr("settings.preview"), 808, 205, 19, TEXT);
+        c.fit(tr("settings.preview_hint"), 808, 231, 12, MUTED, 268);
+        c.round(808, 254, 48, 48, 15, SELECTED); c.icon("music", 820, 266, 24, ACCENT);
+        c.text(tr("brand.name"), 872, 275, 19, TEXT);
+        c.fit(tr("settings.preview_caption"), 872, 297, 12, MUTED, 200);
+        button(c, tr("settings.preview_button"), 808, 325, 268, 42, true, () -> {});
+        c.fit(tr("settings.preview_note"), 808, 402, 12, MUTED, 268);
+        region(c, 784, 442, 316, 154, PANEL);
+        c.text(tr("settings.respect_blur"), 808, 478, 15, TEXT);
+        if (style.enabled()) glassBlurToggle(c, style.respectBackgroundBlur());
+        else { c.round(982, 455, 94, 32, 12, CARD); c.centered(tr(style.respectBackgroundBlur() ? "option.on" : "option.off"), 1029, 476, 12, MUTED); }
+        c.fit(tr("settings.respect_blur_hint"), 808, 514, 12, MUTED, 268);
+        c.fit(tr("settings.respect_blur_hint_off"), 808, 537, 12, MUTED, 268);
+        button(c, tr("action.reset_appearance"), 808, 554, 268, 30, false,
+                () -> changeGlassStyle(new GlassStyle(app.glassStyle.enabled(), GlassStyle.DEFAULT_BLUR, GlassStyle.DEFAULT_REFRACTION, true)));
+    }
+    private void appearanceSlider(Canvas c, String id, String label, String hint, int baseline, double fraction, String value, boolean enabled) {
+        c.text(label, 244, baseline, 15, enabled ? TEXT : MUTED);
+        c.fit(hint, 244, baseline + 23, 12, MUTED, 504);
+        c.round(244, baseline + 46, 410, 5, 2.5, TRACK);
+        c.round(244, baseline + 46, 410 * fraction, 5, 2.5, enabled ? ACCENT : MUTED);
+        double over = motion.value(id + ":hover", enabled && (hover(236, baseline + 33, 426, 31) || dragging.equals(id)));
+        c.round(233 + 410 * fraction, baseline + 37, 23, 23, 11.5, UiMotion.opacity(0x25187b70, over));
+        c.round(240 + 410 * fraction, baseline + 42, 12, 12, 6, enabled ? ACCENT : MUTED);
+        c.round(681, baseline + 32, 67, 32, 10, CARD);
+        c.centered(value, 714, baseline + 53, 12, enabled ? TEXT : MUTED);
+        if (enabled) hit(236, baseline + 33, 426, 31, m -> {
+            dragging = id; focusedSlider = id; focus = null; updateAppearanceSlider(mouseX);
+        });
+    }
+    private void updateAppearanceSlider(double x) {
+        double fraction = Math.clamp((x - 244) / 410, 0, 1);
+        if (dragging.equals("glass-blur")) app.glassStyle = app.glassStyle.withBlur(Math.round(fraction * GlassStyle.MAX_BLUR * 2) / 2.0);
+        if (dragging.equals("glass-mask")) app.glassStyle = app.glassStyle.withMaskOpacity(1 - Math.round(fraction * 100) / 100.0);
+        if (dragging.equals("glass-refraction")) app.glassStyle = app.glassStyle.withRefraction(1 + Math.round(fraction * 100) / 100.0);
+    }
+    private void finishAppearanceDrag() {
+        if (dragging.startsWith("glass-")) { app.persistGlassStyle(); dragging = ""; }
+    }
+    private void changeGlassStyle(GlassStyle style) {
+        finishAppearanceDrag(); focusedSlider = "";
+        app.glassStyle = style; app.persistGlassStyle();
+    }
+    private void playbackSettings(Canvas c) {
+        region(c, 220, 170, 430, 192, PANEL);
+        c.text(tr("settings.hud"), 244, 207, 19, TEXT);
+        c.fit(tr("settings.hud_description"), 244, 237, 12, MUTED, 382);
+        button(c, app.state.hud ? tr("option.on") : tr("option.off"), 244, 290, 146, 40, app.state.hud, () -> app.edit(tr("action.hud"), state -> state.hud = !state.hud));
+        button(c, tr("action.position"), 404, 290, 222, 40, false, host::editHud);
+        region(c, 662, 170, 438, 192, PANEL);
+        c.text(tr("settings.hud_style"), 686, 207, 19, TEXT);
+        c.fit(tr("settings.hud_style_hint"), 686, 237, 12, MUTED, 390);
+        button(c, tr("option.hud_full"), 686, 290, 188, 40, !app.state.hudCompact, () -> app.edit(tr("action.hud_style"), state -> state.hudCompact = false));
+        button(c, tr("option.hud_compact"), 886, 290, 190, 40, app.state.hudCompact, () -> app.edit(tr("action.hud_style"), state -> state.hudCompact = true));
+        region(c, 220, 374, 880, 134, PANEL);
+        c.text(tr("settings.generated_covers"), 244, 411, 19, TEXT);
+        c.fit(tr("settings.generated_covers_hint"), 244, 442, 12, MUTED, 650);
+        c.fit(tr("settings.covers_note"), 244, 480, 12, MUTED, 780);
+        button(c, app.state.generatedCovers ? tr("option.on") : tr("option.off"), 940, 401, 136, 40, app.state.generatedCovers,
                 () -> app.edit(tr("action.generated_covers"), state -> state.generatedCovers = !state.generatedCovers));
-        c.glass(236, 358, 837, 150, 18, PANEL);
-        c.text(tr("settings.svc_redirect"), 258, 390, 17, TEXT);
-        button(c, app.voiceRedirect.enabled() ? tr("option.on") : tr("option.off"), 927, 374, 124, 36,
+        region(c, 220, 520, 880, 76, PANEL);
+        c.text(tr("settings.playback_note"), 244, 565, 13, MUTED);
+    }
+    private void voiceSettings(Canvas c) {
+        region(c, 220, 170, 880, 310, PANEL);
+        c.text(tr("settings.svc_redirect"), 244, 207, 20, TEXT);
+        button(c, app.voiceRedirect.enabled() ? tr("option.on") : tr("option.off"), 940, 187, 136, 40,
                 app.voiceRedirect.enabled(), app::toggleVoiceRedirect);
-        c.fit(tr("settings.svc_hint"), 258, 416, 12, MUTED, 625);
-        c.fit(tr("settings.svc_mute_hint"), 258, 438, 11, MUTED, 785);
-        c.text(tr("settings.svc_gain"), 258, 481, 13, TEXT);
+        c.fit(tr("settings.svc_hint"), 244, 242, 13, MUTED, 790);
+        c.fit(tr("settings.svc_mute_hint"), 244, 271, 12, MUTED, 790);
+        c.round(244, 292, 832, 40, 12, CARD);
+        c.fit(tr(app.voiceRedirect.statusKey()), 260, 318, 13, TEXT, 800);
+        c.text(tr("settings.svc_gain"), 244, 400, 14, TEXT);
         double gain = app.voiceRedirect.gain();
-        double gainHover = motion.value("svc-gain-hover", hover(400, 457, 390, 34) || dragging.equals("svc-gain"));
-        c.round(410, 474, 370, 4, 2, TRACK);
-        c.round(410, 474, 185 * gain, 4, 2, ACCENT);
-        c.round(401 + 185 * gain, 465, 22, 22, 11, UiMotion.opacity(0x25187b70, gainHover));
-        c.round(406 + 185 * gain, 470, 12, 12, 6, ACCENT);
-        c.text(tr("player.volume", (int) Math.round(gain * 100)), 800, 481, 12, TEXT);
-        c.fit(tr(app.voiceRedirect.statusKey()), 884, 481, 11, MUTED, 168);
-        hit(400, 457, 390, 34, m -> { dragging = "svc-gain"; app.voiceRedirect.gain((mouseX - 410) / 185); });
-        c.glass(236, 522, 837, 80, 18, PANEL);
-        c.text(tr("settings.keys"), 258, 547, 15, TEXT);
-        c.fit(tr("settings.keys_hint"), 430, 547, 10, MUTED, 620);
-        c.fit(tr("settings.default_keys", host.binding("open"), host.binding("pause"), host.binding("next"), host.binding("hud")), 258, 570, 12, TEXT, 785);
-        c.fit(tr("settings.default_interact", host.binding("interact")), 258, 591, 11, TEXT, 785);
+        double over = motion.value("svc-gain-hover", hover(400, 377, 390, 34) || dragging.equals("svc-gain"));
+        c.round(410, 393, 370, 5, 2.5, TRACK); c.round(410, 393, 185 * gain, 5, 2.5, ACCENT);
+        c.round(401 + 185 * gain, 384, 22, 22, 11, UiMotion.opacity(0x25187b70, over));
+        c.round(406 + 185 * gain, 390, 12, 12, 6, ACCENT);
+        c.text(tr("player.volume", (int) Math.round(gain * 100)), 812, 400, 14, TEXT);
+        hit(400, 377, 390, 34, m -> { dragging = "svc-gain"; app.voiceRedirect.gain((mouseX - 410) / 185); });
+        c.fit(tr("settings.svc_gain_hint"), 244, 449, 12, MUTED, 790);
+        region(c, 220, 492, 880, 104, PANEL);
+        c.text(tr("settings.voice_requirements"), 244, 529, 16, TEXT);
+        c.fit(tr("settings.voice_requirements_hint"), 244, 560, 12, MUTED, 790);
+    }
+    private void keySettings(Canvas c) {
+        region(c, 220, 170, 430, 426, PANEL);
+        c.text(tr("settings.keys"), 244, 207, 19, TEXT);
+        String[] actions = {"open", "pause", "next", "hud", "interact"};
+        String[] labels = {tr("settings.key.open"), tr("settings.key.pause"), tr("settings.key.next"), tr("settings.key.hud"), tr("settings.key.interact")};
+        for (int i = 0; i < actions.length; i++) {
+            int y = 233 + i * 65;
+            c.text(labels[i], 244, y + 25, 14, TEXT);
+            c.round(472, y, 154, 39, 12, CARD);
+            c.fit(host.binding(actions[i]), 484, y + 25, 13, TEXT, 130);
+            if (i < actions.length - 1) c.line(244, y + 52, 626, y + 52, 1, BORDER);
+        }
+        region(c, 662, 170, 438, 202, PANEL);
+        c.text(tr("settings.library_keys"), 686, 207, 19, TEXT);
+        c.fit(tr("settings.library_keys_line1"), 686, 248, 13, TEXT, 390);
+        c.fit(tr("settings.library_keys_line2"), 686, 280, 13, TEXT, 390);
+        c.fit(tr("settings.library_keys_line3"), 686, 328, 12, MUTED, 390);
+        region(c, 662, 384, 438, 212, PANEL);
+        c.text(tr("settings.rebind"), 686, 421, 19, TEXT);
+        c.fit(tr("settings.rebind_line1"), 686, 458, 13, TEXT, 390);
+        c.fit(tr("settings.rebind_line2"), 686, 490, 13, TEXT, 390);
+        c.fit(tr("settings.rebind_hint"), 686, 548, 12, MUTED, 390);
     }
     private void openBrowser(boolean foldersOnly) {
         this.foldersOnly = foldersOnly; switchPage("browser"); fileSelection.clear(); scrollState("browser").reset();
@@ -338,6 +449,7 @@ public final class MusicView {
         catch (Exception e) { browserError = tr("error.path", e.getMessage()); }
     }
     private void browser(Canvas c) {
+        region(c, 220, 114, 880, 482, BG);
         c.text(foldersOnly ? tr("action.add_folder") : tr("action.choose_files"), 236, 65, 27, TEXT);
         c.text(tr("browser.help"), 236, 94, 12, MUTED);
         address.paint(c, 236, 122, 677, 38, tr("browser.path_placeholder"), focus == address); hit(236, 122, 677, 38, m -> focus = address);
@@ -420,7 +532,7 @@ public final class MusicView {
     private void playlistChooser(Canvas c) {
         overlayLayer = true;
         hits.clear(); viewports.clear(); c.round(10, 10, WIDTH - 20, HEIGHT - 20, 20, 0x55243548);
-        c.glass(340, 155, 440, 404, 23, PANEL); c.text(tr("action.add_to_playlist"), 367, 197, 23, TEXT);
+        c.surface(340, 155, 440, 404, 23, PANEL, app.glassStyle); c.text(tr("action.add_to_playlist"), 367, 197, 23, TEXT);
         var lists = app.state.playlists;
         var rows = beginList(c, "chooser", CHOOSER, lists.size());
         if (lists.isEmpty()) c.text(tr("playlist.none"), 367, 250, 14, MUTED);
@@ -442,7 +554,7 @@ public final class MusicView {
     private void dialog(Canvas c) {
         overlayLayer = true;
         hits.clear(); viewports.clear(); c.round(10, 10, WIDTH - 20, HEIGHT - 20, 20, 0x55243548);
-        c.glass(278, 224, 564, 264, 23, PANEL);
+        c.surface(278, 224, 564, 264, 23, PANEL, app.glassStyle);
         c.text(dialog.title, 307, 267, 24, dialog.danger ? DANGER : TEXT);
         c.fit(dialog.description, 307, 306, 13, MUTED, 505);
         if (dialog.input != null) {
@@ -458,7 +570,7 @@ public final class MusicView {
         if (current == null || current.input != null && current.input.value.isBlank()) return;
         dialog = null; focus = null; current.action.accept(current.input == null ? "" : current.input.value);
     }
-    private void switchPage(String page) { this.page = page; focus = null; selection.clear(); scrollState("library").reset(); scrollState("folders").reset(); anchor = -1; }
+    private void switchPage(String page) { finishAppearanceDrag(); focusedSlider = ""; this.page = page; focus = null; selection.clear(); scrollState("library").reset(); scrollState("folders").reset(); anchor = -1; }
     private void switchLibrary(String id) { playlist = id; switchPage("library"); }
     private SmoothScroll scrollState(String name) { return scrolling.computeIfAbsent(name, ignored -> new SmoothScroll()); }
     private record Rows(Viewport viewport, double offset, int count) {
@@ -502,42 +614,77 @@ public final class MusicView {
         return mouseX >= x && mouseY >= y && mouseX < x + w && mouseY < y + h
                 && (hitClip == null || mouseY >= hitClip.y && mouseY < hitClip.y + hitClip.h && mouseX >= hitClip.x && mouseX < hitClip.x + hitClip.w);
     }
+    private void glassBlurToggle(Canvas c, boolean enabled) {
+        // State is taken from the live style, never the asynchronous disk snapshot.
+        c.round(982, 455, 94, 32, 14, 0x10ffffff);
+        c.round(988, 461, 38, 20, 10, enabled ? 0x55ffffff : 0x20ffffff);
+        c.round(enabled ? 1008 : 991, 464, 14, 14, 7, 0xfff9fbff);
+        c.centered(tr(enabled ? "option.on" : "option.off"), 1050, 476, 12, TEXT);
+        glassFeedback(c, 982, 455, 94, 32, 14);
+        hit(982, 455, 94, 32, m -> changeGlassStyle(app.glassStyle.withRespectBackgroundBlur(!app.glassStyle.respectBackgroundBlur())));
+    }
     private void button(Canvas c, String label, int x, int y, int w, int h, boolean primary, Runnable action) {
         String id = "button:" + x + ":" + y;
         double over = motion.value(id, hover(x, y, w, h));
         double down = motion.value(id + ":press", pressed(x, y, w, h));
         double radius = Math.min(14, h / 2.0);
         c.round(x, y + 2, w, h, radius, UiMotion.opacity(0x10243548, over * (1 - down)));
-        c.glass(x, y, w, h, radius, primary ? ACCENT : PANEL);
-        c.round(x, y, w, h, radius, UiMotion.opacity(primary ? 0x260c433c : 0x18187b70, Math.max(over * .6, down)));
+        if (app.glassStyle.enabled()) {
+            double inset = down * 1.5;
+            c.round(x + inset, y + inset, w - inset * 2, h - inset * 2, radius, primary ? 0x16ffffff : 0x08ffffff);
+        } else c.glass(x, y, w, h, radius, primary ? ACCENT : PANEL);
+        glassFeedback(c, x, y, w, h, radius);
+        c.round(x, y, w, h, radius, UiMotion.opacity(app.glassStyle.enabled() ? 0x24ffffff : primary ? 0x260c433c : 0x18187b70, Math.max(over * .6, down)));
         c.text("", 0, 0, 13, TEXT);
         String display = label;
-        while (display.length() > 1 && Canvas.measure(display, 13) > w - 16) display = display.substring(0, display.offsetByCodePoints(display.length(), -1));
+        while (display.length() > 1 && Canvas.measure(display, 13) > w - 16) display = display.substring(0, UiFonts.previousBoundary(display, display.length()));
         c.centered(display, x + w / 2.0, y + h / 2.0 + 5 + Math.round(down), 13, primary ? BG : TEXT); hit(x, y, w, h, m -> action.run());
     }
     private void iconButton(Canvas c, String icon, int x, int y, int size, Runnable action) {
         String id = "icon:" + x + ":" + y;
         double over = motion.value(id, hover(x, y, size, size));
         double down = motion.value(id + ":press", pressed(x, y, size, size));
-        c.round(x, y, size, size, 10, UiMotion.opacity(0x22187b70, Math.max(over * .6, down)));
+        c.round(x, y, size, size, 10, UiMotion.opacity(app.glassStyle.enabled() ? 0x24ffffff : 0x22187b70, Math.max(over * .6, down)));
+        glassFeedback(c, x, y, size, size, 10);
         c.icon(icon, x + (size - 20) / 2.0, y + (size - 20) / 2.0 + Math.round(down), 20, TEXT); hit(x, y, size, size, m -> action.run());
     }
+    private void glassFeedback(Canvas c, int x, int y, int w, int h, double radius) {
+        if (!app.glassStyle.enabled()) return;
+        if (pressedHit == null || pressedHit.x != x || pressedHit.y != y || pressedHit.w != w || pressedHit.h != h) return;
+        double time = (lastFrame - rippleStart) / 1_000_000_000.0;
+        if (time < 0 || time >= .46) return;
+        double progress = time / .46, expansion = 1 - Math.pow(1 - progress, 3);
+        double limit = Math.min(w, h) * .44;
+        // Keep the expanding circle inside the button's rounded capsule. This
+        // avoids the stretched rectangular glow previously drawn behind labels.
+        double cx = Math.clamp(pressX, x + h * .5, x + w - h * .5);
+        double cy = Math.clamp(pressY, y + limit, y + h - limit);
+        double r = 2 + (limit - 2) * expansion;
+        c.clip(x, y, w, h);
+        c.round(cx - r, cy - r, r * 2, r * 2, r, UiMotion.opacity(0x30ffffff, 1 - progress));
+        double inner = r * .68;
+        c.round(cx - inner, cy - inner, inner * 2, inner * 2, inner, UiMotion.opacity(0x28ffffff, (1 - progress) * (1 - progress)));
+        c.unclip();
+    }
+
     private boolean pressed(int x, int y, int w, int h) {
-        return (pointerDown || System.nanoTime() < pressUntil) && pressedHit != null && pressedHit.contains(x + w / 2.0, y + h / 2.0) && hover(x, y, w, h);
+        return (pointerDown || lastFrame < pressUntil) && pressedHit != null && pressedHit.contains(x + w / 2.0, y + h / 2.0) && hover(x, y, w, h);
     }
     public boolean click(double x, double y, int button, int modifiers) {
         if (button != 0) return false; mouseX = x; mouseY = y;
-        for (int i = hits.size() - 1; i >= 0; i--) if (hits.get(i).contains(x, y)) { pressedHit = hits.get(i); pointerDown = true; pressUntil = System.nanoTime() + 90_000_000L; pressedHit.action.accept(modifiers); return true; }
+        for (int i = hits.size() - 1; i >= 0; i--) if (hits.get(i).contains(x, y)) { pressedHit = hits.get(i); pointerDown = true; pressX = x; pressY = y; rippleStart = System.nanoTime(); pressUntil = rippleStart + 90_000_000L; pressedHit.action.accept(modifiers); return true; }
         focus = null; return true;
     }
     public void drag(double x, double y) {
         mouseX = x; mouseY = y;
+        updateAppearanceSlider(x);
         if (dragging.equals("volume")) app.player.volume((x - 798) / 110);
         if (dragging.equals("svc-gain")) app.voiceRedirect.gain((x - 410) / 185);
         if (dragging.startsWith("scroll:") && dragBar != null) scrollState(dragging.substring(7)).jump(dragBar.offsetAt(y, thumbGrab));
     }
     public void release(double x, double y) {
         pointerDown = false;
+        updateAppearanceSlider(x); finishAppearanceDrag();
         if (dragging.equals("volume")) app.persistVolume();
         if (dragging.equals("svc-gain")) app.persistVoiceGain();
         if (dragging.equals("seek") && app.player.track() != null) app.player.seek(Math.clamp((x - 387) / 289, 0, 1) * app.player.track().duration());
@@ -555,7 +702,7 @@ public final class MusicView {
             if (dialog != null) { dialog = null; focus = null; }
             else if (choosePlaylist) choosePlaylist = false;
             else if (focus != null) focus = null;
-            else host.close(); return true;
+            else { finishAppearanceDrag(); host.close(); } return true;
         }
         if (dialog != null) {
             if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) commitDialog();
@@ -566,6 +713,16 @@ public final class MusicView {
             else focus.key(key, modifiers, host); scrollState("library").reset(); return true;
         }
         if (choosePlaylist) return true;
+        if (page.equals("settings") && settingsTab.equals("appearance") && app.glassStyle.enabled() && !focusedSlider.isEmpty()
+                && (key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT || key == GLFW_KEY_HOME || key == GLFW_KEY_END)) {
+            boolean blur = focusedSlider.equals("glass-blur"), mask = focusedSlider.equals("glass-mask");
+            double step = blur ? .5 : .01;
+            double value = blur ? app.glassStyle.blur() : mask ? 1 - app.glassStyle.maskOpacity() : app.glassStyle.refraction();
+            value = key == GLFW_KEY_HOME ? (blur || mask ? 0 : 1) : key == GLFW_KEY_END ? (blur ? GlassStyle.MAX_BLUR : mask ? 1 : GlassStyle.MAX_REFRACTION)
+                    : value + (key == GLFW_KEY_RIGHT ? step : -step);
+            app.glassStyle = blur ? app.glassStyle.withBlur(value) : mask ? app.glassStyle.withMaskOpacity(1 - value) : app.glassStyle.withRefraction(value);
+            app.persistGlassStyle(); return true;
+        }
         if ((modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) != 0 && key == GLFW_KEY_A) {
             if (page.equals("browser")) files.forEach(e -> fileSelection.add(e.path));
             else if (page.equals("library")) visible().forEach(t -> selection.add(t.path())); return true;
@@ -579,5 +736,5 @@ public final class MusicView {
         return false;
     }
     public boolean character(String text) { if (focus == null) return false; focus.insert(text); scrollState("library").reset(); anchor = -1; selection.clear(); return true; }
-    public void dispose() { pointerDown = false; pressedHit = null; listingVersion.incrementAndGet(); }
+    public void dispose() { finishAppearanceDrag(); pointerDown = false; pressedHit = null; listingVersion.incrementAndGet(); }
 }

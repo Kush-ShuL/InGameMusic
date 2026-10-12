@@ -18,17 +18,25 @@ public final class CachedGuiRenderer implements AutoCloseable {
         long frame;
     }
     private final Map<Key, Entry> cache = new LinkedHashMap<>(256, .75f, true);
+    private final LiquidGlassRenderer liquidGlass = new LiquidGlassRenderer();
     private long frame, serial, bytes;
     private int uploaded, uploadCount;
     private double sx, sy, ox, oy;
     public CachedGuiRenderer() { worker.submit(Canvas::warmup); }
     public void draw(Canvas.Scene scene, DrawContext context, double guiX, double guiY, double designScale) {
+        draw(scene, context, guiX, guiY, designScale, false);
+    }
+    public void draw(Canvas.Scene scene, DrawContext context, double guiX, double guiY, double designScale, boolean backgroundBlurExpected) {
         var window = MinecraftClient.getInstance().getWindow();
         double ratioX = window.getFramebufferWidth() / (double) window.getScaledWidth();
         double ratioY = window.getFramebufferHeight() / (double) window.getScaledHeight();
         sx = designScale * ratioX; sy = designScale * ratioY;
         ox = Math.rint(guiX * ratioX); oy = Math.rint(guiY * ratioY);
+        var glass = scene.commands().stream().filter(Canvas.LiquidGlass.class::isInstance).map(Canvas.LiquidGlass.class::cast).toList();
+        boolean liquidReady = liquidGlass.prepare(glass, sx, sy, ox, oy, backgroundBlurExpected);
+        int liquidIndex = 0;
         frame++; uploaded = 0; uploadCount = 0; evict();
+        get(new Key("disk", "", 128, 128, 0, 0, 0, null, 0));
         var matrix = context.getMatrices(); matrix.pushMatrix(); matrix.scale((float) (1 / ratioX), (float) (1 / ratioY));
         try {
             for (var command : scene.commands()) switch (command) {
@@ -44,12 +52,15 @@ public final class CachedGuiRenderer implements AutoCloseable {
                     else context.fill(x1, y1 - thick / 2, x2, y1 - thick / 2 + thick, r.color());
                 }
                 case Canvas.Label r -> {
-                    var key = new Key("text", r.text(), 0, Math.max(1, (int) Math.round(r.size() * sy)), 0, 0, 0, null, 0);
+                    var key = new Key("text", r.text(), 0, Math.max(1, (int) Math.round(r.size() * sy)), 0, 0, r.bold() ? 1 : 0, null, 0);
+                    if (r.shadowed()) sprite(context, key, px(r.x()), py(r.baseline()) + Math.max(1, (int) Math.round(sy)), 0x48000000);
                     sprite(context, key, px(r.x()), py(r.baseline()), r.color());
                 }
                 case Canvas.Icon r -> {
                     int size = Math.max(1, (int) Math.round(r.size() * Math.min(sx, sy)));
-                    sprite(context, new Key("icon", r.name(), size, size, 0, 0, 0, null, 0), px(r.x()), py(r.y()), r.color());
+                    var key = new Key("icon", r.name(), size, size, 0, 0, 0, null, 0);
+                    if (r.shadowed()) sprite(context, key, px(r.x()), py(r.y()) + Math.max(1, (int) Math.round(sy)), 0x48000000);
+                    sprite(context, key, px(r.x()), py(r.y()), r.color());
                 }
                 case Canvas.Cover r -> {
                     int size = Math.max(1, (int) Math.round(r.size() * Math.min(sx, sy)));
@@ -61,7 +72,14 @@ public final class CachedGuiRenderer implements AutoCloseable {
                 }
                 case Canvas.Glass r -> {
                     int w = Math.max(1, px(r.x() + r.w()) - px(r.x())), h = Math.max(1, py(r.y() + r.h()) - py(r.y()));
-                    sprite(context, new Key("glass", "", w, h, Math.max(1, (int) Math.round(r.radius() * Math.min(sx, sy))), r.tint(), 0, null, 0), px(r.x()), py(r.y()), -1);
+                    sprite(context, new Key(r.clear() ? "clear-control" : "glass", "", w, h, Math.max(1, (int) Math.round(r.radius() * Math.min(sx, sy))), r.tint(), 0, null, 0), px(r.x()), py(r.y()), -1);
+                }
+                case Canvas.LiquidGlass r -> {
+                    if (liquidReady) liquidGlass.draw(liquidIndex++, context);
+                    else {
+                        int w = Math.max(1, px(r.x() + r.w()) - px(r.x())), h = Math.max(1, py(r.y() + r.h()) - py(r.y()));
+                        sprite(context, new Key("glass", "", w, h, (int) Math.round(r.radius() * Math.min(sx, sy)), r.tint(), 0, null, 0), px(r.x()), py(r.y()), -1);
+                    }
                 }
                 case Canvas.Clip r -> context.enableScissor(px(r.x()), py(r.y()), px(r.x() + r.w()), py(r.y() + r.h()));
                 case Canvas.Unclip ignored -> context.disableScissor();
@@ -128,6 +146,11 @@ public final class CachedGuiRenderer implements AutoCloseable {
     private void round(DrawContext c, int x, int y, int w, int h, int radius, int color) {
         if (w <= 0 || h <= 0) return;
         int r = Math.clamp(radius, 0, Math.min(w, h) / 2);
+        if (w == h && radius >= w / 2) {
+            Entry disk = get(new Key("disk", "", 128, 128, 0, 0, 0, null, 0));
+            if (disk.texture != null) disk.texture.drawRegion(c, x, y, w, h, 0, 0, 128, 128, color);
+            return;
+        }
         if (r == 0) { c.fill(x, y, x + w, y + h, color); return; }
         c.fill(x + r, y, x + w - r, y + h, color);
         c.fill(x, y + r, x + r, y + h - r, color);
@@ -149,7 +172,11 @@ public final class CachedGuiRenderer implements AutoCloseable {
             iterator.remove();
         }
     }
+    public void beforeBackgroundBlur() { liquidGlass.beforeBackgroundBlur(); }
+    public void afterBackgroundBlur() { liquidGlass.afterBackgroundBlur(); }
+    public void releaseGlass() { liquidGlass.close(); }
     @Override public void close() {
+        liquidGlass.close();
         worker.shutdownNow(); cache.values().forEach(e -> { if (e.texture != null) e.texture.close(); }); cache.clear(); bytes = 0;
     }
 }

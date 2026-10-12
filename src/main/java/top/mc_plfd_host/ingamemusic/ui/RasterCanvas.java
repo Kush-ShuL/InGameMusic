@@ -3,13 +3,11 @@ package top.mc_plfd_host.ingamemusic.ui;
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.image.BufferedImage;
-import java.io.InputStream;
 
 /** Independent vector-like Java2D UI, rasterized at framebuffer resolution. No vanilla widgets/font. */
 final class RasterCanvas implements AutoCloseable {
     public static final int BG = 0xff10141d, PANEL = 0xff171e2a, CARD = 0xff202938,
             TEXT = 0xffedf3fb, MUTED = 0xff8998af, ACCENT = 0xff8ef0c5, DANGER = 0xffff8997;
-    static final Font FONT = loadFont();
     public final BufferedImage image;
     public final Graphics2D g;
     public final int width, height;
@@ -21,12 +19,6 @@ final class RasterCanvas implements AutoCloseable {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-    }
-    private static Font loadFont() {
-        try (InputStream input = RasterCanvas.class.getResourceAsStream("/assets/ingamemusic/font/notosanssc.ttf")) {
-            if (input != null) return Font.createFont(Font.TRUETYPE_FONT, input);
-        } catch (Exception ignored) { }
-        return new Font(Font.SANS_SERIF, Font.PLAIN, 16);
     }
     public void round(double x, double y, double w, double h, double radius, int color) {
         g.setColor(new Color(color, true)); g.fill(new RoundRectangle2D.Double(x, y, w, h, radius * 2, radius * 2));
@@ -40,19 +32,29 @@ final class RasterCanvas implements AutoCloseable {
         g.draw(new Line2D.Double(x, y, xx, yy));
     }
     public void text(String text, double x, double baseline, float size, int color) {
-        g.setFont(FONT.deriveFont(size)); g.setColor(new Color(color, true)); g.drawString(text == null ? "" : text, (float) x, (float) baseline);
+        text(text, x, baseline, size, color, false, false);
+    }
+    public void text(String text, double x, double baseline, float size, int color, boolean bold, boolean shadowed) {
+        if (text == null || text.isEmpty()) return;
+        var layout = UiFonts.layout(text, size, bold);
+        if (shadowed) {
+            g.setColor(new Color(0x48000000, true));
+            layout.draw(g, (float) x, (float) baseline + 1);
+        }
+        g.setColor(new Color(color, true));
+        layout.draw(g, (float) x, (float) baseline);
     }
     public void fit(String text, double x, double baseline, float size, int color, int maxWidth) {
-        g.setFont(FONT.deriveFont(size)); String display = text == null ? "" : text;
-        if (g.getFontMetrics().stringWidth(display) > maxWidth) {
+        String display = text == null ? "" : text;
+        if (UiFonts.width(display, size, false) > maxWidth) {
             int end = display.length();
-            while (end > 0 && g.getFontMetrics().stringWidth(display.substring(0, end) + "…") > maxWidth) end = display.offsetByCodePoints(end, -1);
+            while (end > 0 && UiFonts.width(display.substring(0, end) + "…", size, false) > maxWidth) end = UiFonts.previousBoundary(display, end);
             display = display.substring(0, end) + "…";
         }
         text(display, x, baseline, size, color);
     }
     public void centered(String text, double x, double baseline, float size, int color) {
-        g.setFont(FONT.deriveFont(size)); text(text, x - g.getFontMetrics().stringWidth(text) / 2.0, baseline, size, color);
+        text(text, x - UiFonts.width(text, size, false) / 2.0, baseline, size, color);
     }
     public void glass(double x, double y, double w, double h, double radius, int tint) {
         var oldClip = g.getClip(); var oldPaint = g.getPaint(); var oldStroke = g.getStroke();
@@ -65,6 +67,19 @@ final class RasterCanvas implements AutoCloseable {
         g.setColor(new Color(0x18243548, true));
         g.setStroke(new BasicStroke(.8f)); g.draw(shape);
         g.setClip(oldClip); g.setPaint(oldPaint); g.setStroke(oldStroke);
+    }
+    /** Offline geometry preview; the live shader transmits and refracts the scene. */
+    public void liquidGlass(double x, double y, double w, double h, double radius, int tint) {
+        var oldStroke = g.getStroke();
+        g.setStroke(new BasicStroke(1.2f)); g.setColor(new Color(0xa0ffffff, true));
+        g.draw(new RoundRectangle2D.Double(x + .7, y + .7, w - 1.4, h - 1.4, radius * 2, radius * 2));
+        g.setStroke(oldStroke);
+    }
+    public void clearControl(double x, double y, double w, double h, double radius, boolean active) {
+        var shape = new RoundRectangle2D.Double(x + .7, y + .7, w - 1.4, h - 1.4, radius * 2, radius * 2);
+        g.setColor(new Color(active ? 0x16ffffff : 0x06ffffff, true)); g.fill(shape);
+        var oldStroke = g.getStroke(); g.setStroke(new BasicStroke(1));
+        g.setColor(new Color(active ? 0xa0ffffff : 0x45ffffff, true)); g.draw(shape); g.setStroke(oldStroke);
     }
     public void cover(BufferedImage cover, double x, double y, int size, int seed) {
         var clip = g.getClip(); g.clip(new RoundRectangle2D.Double(x, y, size, size, Math.min(18, size / 4.0), Math.min(18, size / 4.0)));
@@ -79,6 +94,12 @@ final class RasterCanvas implements AutoCloseable {
             g.setColor(new Color(ACCENT, true)); g.fill(new Ellipse2D.Double(x + size * .46, y + size * .46, size * .08, size * .08));
         }
         g.setClip(clip);
+    }
+    public void icon(String icon, double x, double y, double size, int color, boolean shadowed) {
+        if (shadowed) {
+            icon(icon, x, y + 1, size, 0x48000000);
+        }
+        icon(icon, x, y, size, color);
     }
     public void icon(String icon, double x, double y, double size, int color) {
         var old = g.getTransform(); g.translate(x, y); g.scale(size / 24, size / 24);

@@ -35,29 +35,29 @@ public final class TextEdit {
         if (ctrl && key == GLFW_KEY_V) { insert(host.clipboard()); return true; }
         if (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE) {
             if (cursor != anchor) insert("");
-            else if (key == GLFW_KEY_BACKSPACE && cursor > 0) { anchor = value.offsetByCodePoints(cursor, -1); insert(""); }
-            else if (key == GLFW_KEY_DELETE && cursor < value.length()) { anchor = value.offsetByCodePoints(cursor, 1); insert(""); }
+            else if (key == GLFW_KEY_BACKSPACE && cursor > 0) { anchor = UiFonts.previousBoundary(value, cursor); insert(""); }
+            else if (key == GLFW_KEY_DELETE && cursor < value.length()) { anchor = UiFonts.nextBoundary(value, cursor); insert(""); }
             return true;
         }
         if (key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT || key == GLFW_KEY_HOME || key == GLFW_KEY_END) {
             cursor = switch (key) {
                 case GLFW_KEY_HOME -> 0; case GLFW_KEY_END -> value.length();
-                case GLFW_KEY_LEFT -> cursor > 0 ? value.offsetByCodePoints(cursor, -1) : 0;
-                default -> cursor < value.length() ? value.offsetByCodePoints(cursor, 1) : value.length();
+                case GLFW_KEY_LEFT -> cursor > 0 ? UiFonts.previousBoundary(value, cursor) : 0;
+                default -> cursor < value.length() ? UiFonts.nextBoundary(value, cursor) : value.length();
             };
             if (!shift) anchor = cursor; return true;
         }
         return false;
     }
     private int prefixAt(int width) {
-        int low = 0, high = value.length();
+        int[] boundaries = UiFonts.boundaries(value);
+        int low = 0, high = boundaries.length - 1;
         while (low < high) {
             int middle = (low + high + 1) / 2;
-            if (Canvas.measure(value.substring(0, middle), FONT_SIZE) <= width) low = middle;
+            if (Canvas.measure(value.substring(0, boundaries[middle]), FONT_SIZE) <= width) low = middle;
             else high = middle - 1;
         }
-        if (low > 0 && low < value.length() && Character.isLowSurrogate(value.charAt(low))) low--;
-        return low;
+        return boundaries[low];
     }
     public void paint(Canvas c, int x, int y, int w, int h, String placeholder, boolean focused) {
         this.x = x; this.y = y; this.width = w; this.height = h;
@@ -78,7 +78,7 @@ public final class TextEdit {
         if (value.isEmpty()) c.text(placeholder, x + 11, y + h / 2.0 + 5, FONT_SIZE, Canvas.MUTED);
         else {
             int start = prefixAt(offset), end = prefixAt(offset + w);
-            if (end < value.length()) end = value.offsetByCodePoints(end, 1);
+            if (end < value.length()) end = UiFonts.nextBoundary(value, end);
             int prefix = Canvas.measure(value.substring(0, start), FONT_SIZE);
             c.text(value.substring(start, end), x + 11 + prefix - offset, y + h / 2.0 + 5, FONT_SIZE, Canvas.TEXT);
         }

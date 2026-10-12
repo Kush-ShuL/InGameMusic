@@ -13,9 +13,9 @@ public final class HudView {
     }
     public static Canvas.Scene scene(MusicController app, CoverCache covers, boolean compact, UiMotion motion, double mouseX, double mouseY, boolean pressed) {
         int w = width(compact), h = height(compact);
-        try (Canvas c = new Canvas(w, h)) {
+        try (Canvas c = new Canvas(w, h, app.glassStyle.enabled())) {
             c.round(2, 4, w - 4, h - 4, 14, 0x20000000);
-            c.glass(2, 1, w - 4, h - 6, 17, PANEL);
+            c.surface(2, 1, w - 4, h - 6, 17, PANEL, app.glassStyle);
             if (motion != null) {
                 int[][] controls = compact ? new int[][]{{208, 10, 33, 36}, {241, 10, 28, 36}, {269, 10, 28, 36}}
                         : new int[][]{{73, 55, 31, 28}, {104, 55, 39, 28}, {143, 55, 37, 28}, {280, 10, 27, 35}, {307, 10, 28, 35}};
@@ -23,7 +23,11 @@ public final class HudView {
                     int[] r = controls[i]; boolean hover = mouseX >= r[0] && mouseX < r[0] + r[2] && mouseY >= r[1] && mouseY < r[1] + r[3];
                     double over = motion.value("hud:" + compact + ":" + i, hover);
                     double down = motion.value("hud-press:" + compact + ":" + i, hover && pressed);
-                    c.round(r[0], r[1], r[2], r[3], 8, UiMotion.opacity(0x28187b70, Math.max(over * .55, down)));
+                    c.round(r[0], r[1], r[2], r[3], 8, UiMotion.opacity(app.glassStyle.enabled() ? 0x35ffffff : 0x28187b70, Math.max(over * .55, down)));
+                    if (app.glassStyle.enabled()) {
+                        double inset = 3 * (1 - down);
+                        c.round(r[0] + inset, r[1] + inset, r[2] - inset * 2, r[3] - inset * 2, 7, UiMotion.opacity(0x45ffffff, down));
+                    }
                 }
             }
             var track = app.player.track();

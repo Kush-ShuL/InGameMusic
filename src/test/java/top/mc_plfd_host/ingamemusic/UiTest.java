@@ -94,7 +94,7 @@ class UiTest {
         var bitmap = SpriteRasterizer.render(key);
         assertTrue(bitmap.width() > 28); assertTrue(bitmap.height() > 28);
         assertEquals(bitmap.width() * bitmap.height(), bitmap.rgba().length);
-        assertEquals(0, bitmap.rgba()[0]); assertTrue(bitmap.anchorY() > 3);
+        assertEquals(0, bitmap.rgba()[0] >>> 24); assertTrue(bitmap.anchorY() > 3);
         assertTrue(Arrays.stream(bitmap.rgba()).anyMatch(p -> (p >>> 24) > 200));
     }
     @Test void lightMaterialIsOpaqueWithOnlyASubtleGradient() {
@@ -134,7 +134,9 @@ class UiTest {
             }
             view.scene(0, 0); view.click(100, 220, 0, 0);
             ImageIO.write(view.render(1.5, 0, 0), "png", output.resolve("settings.png").toFile());
-            view.click(980, 307, 0, 0);
+            view.click(520, 136, 0, 0); view.scene(0, 0);
+            ImageIO.write(view.render(1.5, 0, 0), "png", output.resolve("settings-playback.png").toFile());
+            view.click(980, 420, 0, 0);
             long deadline = System.nanoTime() + 15_000_000_000L;
             while (!app.state.generatedCovers && System.nanoTime() < deadline) Thread.sleep(10);
             assertTrue(app.state.generatedCovers);

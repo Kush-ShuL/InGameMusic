@@ -24,6 +24,7 @@ public final class MusicController implements AutoCloseable {
         Thread t = new Thread(r, "InGameMusic-library"); t.setDaemon(true); return t;
     });
     public volatile MusicState state;
+    public volatile top.mc_plfd_host.ingamemusic.ui.GlassStyle glassStyle;
     public volatile String notice = tr("status.welcome");
     public volatile boolean busy;
     public volatile long revision;
@@ -32,6 +33,7 @@ public final class MusicController implements AutoCloseable {
     public MusicController(Path home) throws IOException {
         library = new Library(home); metadata = new Metadata(home);
         refresh(); player.volume(state.volume);
+        glassStyle = top.mc_plfd_host.ingamemusic.ui.GlassStyle.from(state);
         voiceRedirect.enabled(state.simpleVoiceChatRedirect); voiceRedirect.gain(state.svcGain);
     }
     public void refresh() { state = library.snapshot(); revision++; }
@@ -48,6 +50,10 @@ public final class MusicController implements AutoCloseable {
     public void toggleVoiceRedirect() {
         boolean enabled = !voiceRedirect.enabled(); voiceRedirect.enabled(enabled);
         edit(tr("action.svc_redirect"), s -> s.simpleVoiceChatRedirect = enabled);
+    }
+    public void persistGlassStyle() {
+        var value = glassStyle;
+        edit(tr("action.appearance"), value::store);
     }
     public void persistVoiceGain() {
         double gain = voiceRedirect.gain(); edit(tr("action.svc_gain"), s -> s.svcGain = gain);
