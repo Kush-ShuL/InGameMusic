@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "ingamemusic",
+  "version": "${version}",
+  "name": "InGame Music · 声屿",
+  "description": "A client-only local music library with a custom HiDPI interface.",
+  "authors": ["mc_plfd_host"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["top.mc_plfd_host.ingamemusic.InGameMusic"],
+    "voicechat": ["top.mc_plfd_host.ingamemusic.compat.SimpleVoiceChatPlugin"]
+  },
+  "breaks": {"voicechat_api": "<2.6.13"},
+  "depends": {"fabricloader": ">=0.18.4", "minecraft": "~1.21.11", "java": ">=21", "fabric-api": "*"}
+}
