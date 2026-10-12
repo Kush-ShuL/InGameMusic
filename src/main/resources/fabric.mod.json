@@ -5,7 +5,7 @@
   "name": "InGame Music · 声屿",
   "description": "A client-only local music library with a custom HiDPI interface.",
   "authors": ["mc_plfd_host"],
-  "license": "All Rights Reserved",
+  "license": "LGPL-3.0-only",
   "environment": "client",
   "mixins": ["ingamemusic.mixins.json"],
   "entrypoints": {

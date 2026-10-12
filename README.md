@@ -207,4 +207,6 @@ python3 tools/collect_dependency_sources.py
 
 ## 许可证
 
-本项目自有代码与文档采用 **ARR（All Rights Reserved，保留所有权利）**，详见 [LICENSE](LICENSE)。第三方组件遵循各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+Copyright (c) 2026 mc_plfd_host。
+
+本项目自有代码与文档采用 **GNU Lesser General Public License v3.0（LGPL-3.0-only）**，详见 [LICENSE](LICENSE) 及其引用的 [GPLv3 全文](COPYING)。第三方组件遵循各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

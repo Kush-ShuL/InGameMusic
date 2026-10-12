@@ -32,7 +32,13 @@ tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.
 processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand version: project.version } }
 test { useJUnitPlatform(); systemProperty 'java.awt.headless', 'true' }
 
-jar { from('LICENSE') { rename { 'LICENSE-ingamemusic' } } }
+// LGPLv3 incorporates GPLv3; ship both license texts with binaries and sources.
+for (taskName in ['jar', 'sourcesJar']) {
+    tasks.named(taskName) {
+        from('LICENSE') { rename { 'LICENSE-ingamemusic' } }
+        from('COPYING') { rename { 'COPYING-GPL-3.0' } }
+    }
+}
 
 // Optional read-only ABI verification against a locally installed IMBlocker; never bundled.
 if (providers.gradleProperty('imblockerTestJar').isPresent()) {

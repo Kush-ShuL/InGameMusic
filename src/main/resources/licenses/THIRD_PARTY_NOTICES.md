@@ -1,6 +1,6 @@
 # Third-party components
 
-InGame Music's own code is All Rights Reserved (ARR). Dependencies keep their respective licenses.
+Copyright (c) 2026 mc_plfd_host. InGame Music's own code and documentation are licensed under the GNU Lesser General Public License, version 3 only (LGPL-3.0-only). See LICENSE and COPYING for the LGPLv3 and GPLv3 texts. Dependencies keep their respective licenses.
 All audio decoding is Java code. No FFmpeg, JNI codec, external executable or runtime download is used.
 Java Sound uses the Java runtime's platform audio output implementation.
 
