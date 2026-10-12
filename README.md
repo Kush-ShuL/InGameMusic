@@ -139,7 +139,7 @@ config/ingamemusic/
 
 损坏的配置会保留时间戳备份；修复或移走损坏配置后可重新启动。
 
-自绘输入框提供可选的 **IMBlocker** 适配，用于搜索、路径、歌单和重命名输入。已核对 IMBlocker 6.0.3 Fabric（1.21.9+）的接口；实际输入法兼容性仍需在对应游戏环境中验证。
+自绘输入框提供可选的 **IMBlocker** 适配，用于搜索、路径、歌单和重命名输入。
 
 ## 从源码构建
 
@@ -151,17 +151,17 @@ config/ingamemusic/
 ```
 
 ```sh
-# Linux / WSL：构建与离屏测试
+# Bash / sh
 ./gradlew build
 ```
 
-可安装的模组位于 `build/libs/ingamemusic-1.0.0.jar`，所需 Java 音频库已随包提供。开发环境、测试、翻译和客户端验证说明见 [开发指南](docs/DEVELOPMENT.md)。
+可安装的模组位于 `build/libs/ingamemusic-1.0.0.jar`，所需 Java 音频库已随包提供。更多开发说明见 [开发指南](docs/DEVELOPMENT.md)。
 
 ## 反馈与贡献
 
 欢迎通过 [GitHub Issues](https://github.com/Kush-ShuL/InGameMusic/issues) 提交问题或建议。报告问题时，请附上 Minecraft、声屿和 Fabric Loader 版本、操作系统、复现步骤及相关日志；音频问题请同时说明文件格式。
 
-代码改进和翻译贡献可通过 Pull Request 提交，构建与验证方式见 [开发指南](docs/DEVELOPMENT.md)。
+欢迎通过 Pull Request 提交代码改进和翻译。
 
 ## 许可证
 

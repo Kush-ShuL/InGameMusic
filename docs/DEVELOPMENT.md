@@ -2,7 +2,7 @@
 
 用户安装和使用说明见 [项目首页](../README.md)。
 
-## 构建与测试
+## 构建
 
 使用 JDK 21 和仓库中的 Gradle Wrapper：
 
@@ -12,47 +12,31 @@
 ```
 
 ```sh
-# Linux / WSL
+# Bash / sh
 ./gradlew build
 ```
 
-模组与源码 JAR 输出到 `build/libs/`，离屏界面预览输出到 `build/previews/`。自动测试覆盖音频解码、音乐库与文件操作、配置、语言键、Unicode 输入、界面交互和可选模组适配。
+模组与源码 JAR 输出到 `build/libs/`。
 
-离屏预览用于检查自绘界面，不等同于实际游戏操作测试。客户端交互验收使用 **Windows 原生环境**：
+## 常用开发任务
 
-```powershell
-.\gradlew.bat runClient
-```
+| 任务 | Windows PowerShell | Bash / sh |
+| --- | --- | --- |
+| 运行自动测试 | `.\gradlew.bat test` | `./gradlew test` |
+| 启动开发客户端 | `.\gradlew.bat runClient` | `./gradlew runClient` |
 
-**不要在 WSL2 / WSLg 中启动 Minecraft 进行本项目验证。** Linux / WSL 用于构建、自动测试和离屏渲染。发布前应在 Windows 原生 Minecraft 中确认纹理、快捷键、浮窗拖动、输入法、音频设备输出及语音分享。
-
-## 液态玻璃验证
-
-液态玻璃通过屏幕空间近似计算曲面入射、介质内传播与背面出射，使用 Snell 折射、Fresnel 反射和 Cauchy 色散。背景被视为虚拟平面，反射取自当前画面，不能重建真实场景深度或屏幕外景物。
-
-Linux / WSL 安装 Mesa EGL / OpenGL 库后，可验证实际 GLSL 着色器而不启动游戏：
-
-```sh
-python3 tools/validate_glass_shaders.py --previews
-```
-
-检查包括颜色还原、模糊响应、边缘采样、曲面连续性、折射与色散、圆角裁切和蒙版。生成的材质预览使用程序化背景，位于 `build/previews/`。游戏背景模糊的调用时序及实际显卡表现仍需客户端验收。
+测试报告位于 `build/reports/tests/test/index.html`，界面预览输出到 `build/previews/`。
 
 ## 可选模组接口检查
 
-IMBlocker 适配提供隔离的焦点协议测试。可指定本地 JAR 额外只读检查真实接口：
+可通过 Gradle 属性指定 IMBlocker 或 Simple Voice Chat JAR，运行额外的接口兼容性检查：
 
 ```powershell
 .\gradlew.bat build '-PimblockerTestJar=C:\path\to\IMBlocker.jar'
-```
-
-语音分享编译目标为 Simple Voice Chat API 2.6.13，使用 `MergeClientSoundEvent`，不捆绑 Simple Voice Chat。可指定本地 JAR 检查插件事件接口：
-
-```powershell
 .\gradlew.bat build '-PvoicechatTestJar=C:\path\to\voicechat.jar'
 ```
 
-请将示例路径替换为实际文件路径。这些检查不会调用系统输入法、启动 Minecraft 或发送语音；输入法候选窗和实际语音听感需在游戏中验证。
+请将示例路径替换为实际文件路径。
 
 ## 翻译与字体
 
