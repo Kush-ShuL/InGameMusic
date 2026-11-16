@@ -88,7 +88,9 @@ public final class MusicController implements AutoCloseable {
                 notice = tr("status.scanning", ++done, files.size(), file.getFileName());
                 try {
                     Track known = library.find(file.toRealPath().toString());
-                    batch.add(known != null && known.modified() == Files.getLastModifiedTime(file).toMillis() ? known : metadata.read(file));
+                    // Re-read Opus tags on an explicit scan, including records imported before artwork support.
+                    batch.add(known != null && known.modified() == Files.getLastModifiedTime(file).toMillis()
+                            && !top.mc_plfd_host.ingamemusic.audio.JavaDecoder.isOpus(file) ? known : metadata.read(file));
                 } catch (Exception e) { warnings.add(file.getFileName() + ": " + e.getMessage()); }
                 if (batch.size() == 25) { library.upsert(batch); batch.clear(); refresh(); }
             }

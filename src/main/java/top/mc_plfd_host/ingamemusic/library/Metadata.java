@@ -32,6 +32,21 @@ public final class Metadata {
                     cover = storeCover(new ByteArrayInputStream(artwork.getBinaryData()), path + ":" + modified);
             }
         } catch (Exception ignored) { /* AAC ADTS and untagged files are still playable. */ }
+        if (JavaDecoder.isOpus(path)) {
+            try {
+                var tags = OpusMetadata.read(path);
+                if (!tags.title().isBlank()) title = tags.title();
+                if (!tags.artist().isBlank()) artist = tags.artist();
+                if (!tags.composer().isBlank()) composer = tags.composer();
+                if (!tags.album().isBlank()) album = tags.album();
+                for (int i = 0; i < tags.pictures().size(); i++) {
+                    try {
+                        String embedded = storeCover(new ByteArrayInputStream(tags.pictures().get(i)), path + ":" + modified + ":opus:" + i);
+                        if (!embedded.isEmpty()) { cover = embedded; break; }
+                    } catch (Exception ignored) { /* Continue to the next embedded image. */ }
+                }
+            } catch (IOException ignored) { /* Keep playable files even when their tags cannot be read. */ }
+        }
         if (duration <= 0) {
             try {
                 var info = JavaDecoder.inspect(path);
@@ -39,8 +54,8 @@ public final class Metadata {
                 if (micros instanceof Number number) duration = number.doubleValue() / 1_000_000;
                 else if (info.getFrameLength() > 0 && info.getFormat().getFrameRate() > 0)
                     duration = info.getFrameLength() / (double) info.getFormat().getFrameRate();
-                Object name = info.properties().get("title"); if (name != null) title = name.toString();
-                Object author = info.properties().get("author"); if (author != null) artist = author.toString();
+                Object name = info.properties().get("title"); if (name != null && title.equals(Track.stem(path.getFileName().toString()))) title = name.toString();
+                Object author = info.properties().get("author"); if (author != null && artist.isBlank()) artist = author.toString();
             } catch (Exception ignored) { /* Report decoder errors at playback instead of discarding local files. */ }
         }
         if (cover.isEmpty()) {

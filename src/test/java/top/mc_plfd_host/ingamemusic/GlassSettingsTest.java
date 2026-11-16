@@ -144,7 +144,7 @@ class GlassSettingsTest {
             view.dispose();
         }
     }
-    private static void writeGlassPreview(Canvas.Scene scene, String name) throws Exception {
+    static void writeGlassPreview(Canvas.Scene scene, String name) throws Exception {
         Path output = Path.of("build/previews");
         var panes = scene.commands().stream().filter(Canvas.LiquidGlass.class::isInstance).map(Canvas.LiquidGlass.class::cast).toList();
         var foreground = new Canvas.Scene(scene.width(), scene.height(), scene.commands().stream().filter(c -> !(c instanceof Canvas.LiquidGlass) && !(c instanceof Canvas.Round r && (r.color() == 0x18040d1c || r.color() == 0x20000000))).toList());

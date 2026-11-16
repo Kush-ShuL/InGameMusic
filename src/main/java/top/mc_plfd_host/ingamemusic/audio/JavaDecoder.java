@@ -20,15 +20,20 @@ public final class JavaDecoder {
             case "aac" -> new Codec(new AACAudioFileReader(), new AACFormatConversionProvider());
             case "opus" -> new Codec(new OpusAudioFileReader(), new OpusFormatConversionProvider());
             case "ogg", "oga" -> {
-                byte[] head;
-                try (var input = Files.newInputStream(path)) { head = input.readNBytes(64); }
-                boolean opus = new String(head, java.nio.charset.StandardCharsets.ISO_8859_1).contains("OpusHead");
-                yield opus ? new Codec(new OpusAudioFileReader(), new OpusFormatConversionProvider())
+                yield isOpus(path) ? new Codec(new OpusAudioFileReader(), new OpusFormatConversionProvider())
                         : new Codec(new VorbisAudioFileReader(), new VorbisFormatConversionProvider());
             }
             case "wav" -> null;
             default -> throw new IOException(tr("error.format", path.getFileName()));
         };
+    }
+    public static boolean isOpus(Path path) throws IOException {
+        String extension = Track.extension(path);
+        if (extension.equals("opus")) return true;
+        if (!extension.equals("ogg") && !extension.equals("oga")) return false;
+        try (var input = Files.newInputStream(path)) {
+            return new String(input.readNBytes(64), java.nio.charset.StandardCharsets.ISO_8859_1).contains("OpusHead");
+        }
     }
     private static AudioInputStream guard(AudioInputStream decoded) {
         // The JDK wrapper handles zero-length reads before entering third-party SPI code.

@@ -221,11 +221,8 @@ try:
     assert max(abs(masked[center+i]-neutral[center+i]*.5) for i in range(3))<=1, 'A partial mask must darken all channels equally'
     opaque=panel(source,1,1)
     assert opaque[center:center+3]==b'\0\0\0', 'Zero mask transparency must block the scene'
-    # The crown must bend the body as well as the rounded shoulder. A rim-only
-    # effect cannot change any samples more than 30 pixels inside the panel.
-    body_differences = sum(abs(neutral[(y*pw+x)*4]-bent[(y*pw+x)*4]) > 3
-                           for y in range(32, ph-32) for x in range(32, pw-32))
-    assert body_differences > 400, 'Finite-thickness curved glass must refract the interior'
+    assert all(abs(neutral[(y*pw+x)*4+c]-bent[(y*pw+x)*4+c]) <= 1
+               for y in range(32, ph-32) for x in range(32, pw-32) for c in range(3)), 'The flat face must preserve scene detail without magnification'
     differences=[i//4 for i in range(0,len(bent),4) if abs(neutral[i]-bent[i])>3]
     assert len(differences)>200,'Increasing refractive index must visibly bend the scene'
     flat=bytes((74,131,189,255))*(w*h)
@@ -233,61 +230,25 @@ try:
     flat_glass=panel(flat_source,1)
     assert all(max(abs(flat_glass[i+c]-(74,131,189)[c]) for c in range(3))<=1
                for i in range(0,len(flat_glass),4) if flat_glass[i+3]>0), 'Index 1 must transmit uniform color without any painted highlight'
-    # No synthetic lighting: uniform scenery must stay uniform at every panel
-    # size and index, including the former bright shoulder reflections.
+    # The outline is subtle and directional; the face keeps the original color.
     for gw,gh in ((340,94),(602,482),(880,82)):
         output_pane=texture(gw,gh)
         for index in (1,1.35,2):
             material=render(surface,flat_source,output_pane,gw,gh,[w,h,0,0,0,0,gw,gh,18,index,1,0,0,0,0,0])
-            assert all(max(abs(material[i+c]-(74,131,189)[c]) for c in range(3))<=1
-                       for i in range(0,len(material),4) if material[i+3]>0), 'Glass may not add artificial lighting or tint to the scene'
-    # Exercise the actual GLSL geometry independently of scenery: equal aspect
-    # panes at different sizes must retain their crown normal, not flatten out.
-    geometry_source=(SHADERS/'glass_surface.fsh').read_text().split('void main() {')[0]
-    normals=program('glass_surface.fsh',(geometry_source+"""
-void main() {
-    vec2 point = (texCoord - 0.5) * Rect.zw;
-    vec3 shape = geometry(point);
-    vec3 n = normalize(vec3(-shape.xy, 1.0));
-    fragColor = vec4(n * 0.5 + 0.5, 1.0);
-}
-""").encode())
-    samples=[]
-    for gw,gh in ((256,176),(768,528)):
-        normal_map=render(normals,source,texture(gw,gh),gw,gh,[w,h,0,0,0,0,gw,gh,18,1.35,1,0,0,0,0,0])
-        pos=(gh//2*gw+gw*3//4)*4;samples.append(normal_map[pos:pos+3])
-    assert max(abs(a-b) for a,b in zip(*samples))<=1, 'Large panels must not lose crown curvature relative to HUD-size panes'
-    # Probe the derivative of the slope on both sides of the shoulder/crown join.
-    # The former sine shoulder had a second-derivative jump and fails this check.
-    curvature=program('glass_surface.fsh',(geometry_source+"""
-void main() {
-    vec2 p = Reserved.xy + vec2((texCoord.x - 0.5) * 0.8, 0.0);
-    vec2 a = p + vec2(0.02, 0.0), b = p - vec2(0.02, 0.0);
-    float derivative = (geometry(a).x - geometry(b).x) / 0.04;
-    fragColor = vec4(vec3(0.5 + derivative * 3.0), 1.0);
-}
-""").encode())
-    for gw,gh in ((340,94),(602,482)):
-        shoulder_width=min(max(24, min(gw,gh)*.5*.22), min(gw,gh)*.5*.65)
-        seam=render(curvature,source,texture(2,1),2,1,[w,h,0,0,0,0,gw,gh,18,1.35,1,0,gw*.5-shoulder_width,0,0,0])
-        assert abs(seam[0]-seam[4])<=3, 'The edge and crown must join with continuous slope derivative'
-    corner_probe=program('glass_surface.fsh',(geometry_source+"""
-void main() {
-    vec2 point = Reserved.xy + vec2((texCoord.x - 0.5) * 0.8, 0.0);
-    vec3 shape = geometry(point);
-    fragColor = vec4(normalize(vec3(-shape.xy, 1.0)) * 0.5 + 0.5, 1.0);
-}
-""").encode())
-    for depth in (20,30,40):
-        corner=render(corner_probe,source,texture(2,1),2,1,[w,h,0,0,0,0,602,482,18,1.35,1,0,301-depth,241-depth,0,0])
-        assert max(abs(corner[c]-corner[4+c]) for c in range(3))<=2, 'Rounded corner normals must not jump across the nearest-edge diagonal'
+            if index == 1:
+                assert all(max(abs(material[i+c]-(74,131,189)[c]) for c in range(3))<=1
+                           for i in range(0,len(material),4) if material[i+3]>0), 'Index 1 must remain optically neutral'
+            else:
+                center=(gh//2*gw+gw//2)*4
+                assert max(abs(material[center+c]-(74,131,189)[c]) for c in range(3))<=1, 'The center must retain the original scene color'
+                assert max(material[i]-74 for i in range(0,len(material),4) if material[i+3]>200)>8, 'The edge glint must remain visible'
     respect=panel(soft,1)
     assert energy(respect)<energy(neutral)*.65,'Sampling a blurred layer must not recover sharp detail'
     output=ROOT/'build/previews';output.mkdir(parents=True,exist_ok=True)
     png(output/'glass-shader-sharp.png',pw,ph,neutral)
     png(output/'glass-shader-refracted.png',pw,ph,bent)
     png(output/'glass-shader-blurred.png',pw,ph,panel(soft,1.35))
-    print('PASS: GLSL compile/link, zero blur, blur reduction, no ghost stripes/edge wrapping, no artificial lighting at HUD/main sizes, C2 shoulder join, no diagonal normal seams, rounded mask, no tint, neutral index, full-surface ray refraction, Cauchy dispersion, neutral mask, blurred-source preservation.')
+    print('PASS: GLSL compile/link, zero blur, blur reduction, no ghost stripes/edge wrapping, flat clear face, edge refraction and dispersion, subtle glint, rounded mask, neutral index, neutral mask, blurred-source preservation.')
     import sys
     if '--previews' in sys.argv:layout_previews(blur,surface)
 finally:

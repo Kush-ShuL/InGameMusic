@@ -17,7 +17,6 @@ public final class MusicScreen extends Screen {
     private final MusicView view;
     private double uiScale;
     private IMBlockerBridge inputMethod;
-    private int left, top, drawnWidth, drawnHeight;
     public MusicScreen(Screen parent) {
         super(Text.literal(tr("screen.player"))); this.parent = parent;
         view = new MusicView(InGameMusic.controller(), InGameMusic.covers(), new MusicView.Host() {
@@ -38,19 +37,19 @@ public final class MusicScreen extends Screen {
     @Override protected void init() {
         if (inputMethod == null && FabricLoader.getInstance().isModLoaded("imblocker"))
             inputMethod = IMBlockerBridge.connect(getClass().getClassLoader());
-        uiScale = Math.min(width / (double) MusicView.WIDTH, height / (double) MusicView.HEIGHT) * .97;
-        drawnWidth = (int) (MusicView.WIDTH * uiScale); drawnHeight = (int) (MusicView.HEIGHT * uiScale);
-        left = (width - drawnWidth) / 2; top = (height - drawnHeight) / 2;
+        uiScale = Math.min(width / (double) MusicView.WIDTH, height / (double) MusicView.HEIGHT);
+        view.resize((int) Math.round(width / uiScale), (int) Math.round(height / uiScale));
     }
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        if (client.world == null) renderPanoramaBackground(context, delta);
         if (view.app.glassStyle.enabled()) context.applyBlur();
         context.fill(0, 0, width, height, view.app.glassStyle.enabled() ? 0x20070d1c : 0x48070d1c);
-        InGameMusic.renderer().draw(view.scene(localX(mouseX), localY(mouseY)), context, left, top, uiScale, view.app.glassStyle.enabled());
+        InGameMusic.renderer().draw(view.scene(localX(mouseX), localY(mouseY)), context, 0, 0, uiScale, view.app.glassStyle.enabled());
         syncInput();
     }
     @Override public void renderBackground(DrawContext context, int x, int y, float delta) { }
-    private double localX(double x) { return (x - left) / uiScale; }
-    private double localY(double y) { return (y - top) / uiScale; }
+    private double localX(double x) { return x / uiScale; }
+    private double localY(double y) { return y / uiScale; }
     @Override public boolean mouseClicked(Click click, boolean doubled) { boolean result = view.click(localX(click.x()), localY(click.y()), click.button(), click.modifiers()); syncInput(); return result; }
     @Override public boolean mouseReleased(Click click) { view.release(localX(click.x()), localY(click.y())); return true; }
     @Override public boolean mouseDragged(Click click, double dx, double dy) { view.drag(localX(click.x()), localY(click.y())); return true; }
@@ -62,9 +61,10 @@ public final class MusicScreen extends Screen {
     }
     private void syncInput() {
         if (inputMethod != null) inputMethod.sync(
-                MinecraftClient.getInstance().currentScreen == this ? view.focusedInput() : null, left, top, uiScale);
+                MinecraftClient.getInstance().currentScreen == this ? view.focusedInput() : null, 0, 0, uiScale);
     }
     @Override public boolean shouldPause() { return false; }
+    public boolean hasTextFocus() { return view.hasTextFocus(); }
     @Override public void close() { MinecraftClient.getInstance().setScreen(parent); }
     @Override public void removed() { if (inputMethod != null) inputMethod.close(); view.dispose(); InGameMusic.renderer().releaseGlass(); }
 }

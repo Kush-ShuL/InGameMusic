@@ -57,29 +57,18 @@ final class RasterCanvas implements AutoCloseable {
         text(text, x - UiFonts.width(text, size, false) / 2.0, baseline, size, color);
     }
     public void glass(double x, double y, double w, double h, double radius, int tint) {
-        var oldClip = g.getClip(); var oldPaint = g.getPaint(); var oldStroke = g.getStroke();
-        var shape = new RoundRectangle2D.Double(x + .6, y + .6, w - 1.2, h - 1.2, radius * 2, radius * 2);
-        g.clip(shape);
-        g.setColor(new Color(tint | 0xff000000, true)); g.fill(shape);
-        g.setPaint(new java.awt.LinearGradientPaint((float) x, (float) y, (float) x, (float) (y + h),
-                new float[]{0, 1}, new Color[]{new Color(0x08ffffff, true), new Color(0x03243548, true)}));
-        g.fill(shape);
-        g.setColor(new Color(0x18243548, true));
-        g.setStroke(new BasicStroke(.8f)); g.draw(shape);
-        g.setClip(oldClip); g.setPaint(oldPaint); g.setStroke(oldStroke);
+        round(x, y, w, h, radius, tint | 0xff000000);
     }
     /** Offline geometry preview; the live shader transmits and refracts the scene. */
     public void liquidGlass(double x, double y, double w, double h, double radius, int tint) {
         var oldStroke = g.getStroke();
-        g.setStroke(new BasicStroke(1.2f)); g.setColor(new Color(0xa0ffffff, true));
+        g.setStroke(new BasicStroke(.5f)); g.setColor(new Color(0x30ffffff, true));
         g.draw(new RoundRectangle2D.Double(x + .7, y + .7, w - 1.4, h - 1.4, radius * 2, radius * 2));
         g.setStroke(oldStroke);
     }
     public void clearControl(double x, double y, double w, double h, double radius, boolean active) {
         var shape = new RoundRectangle2D.Double(x + .7, y + .7, w - 1.4, h - 1.4, radius * 2, radius * 2);
-        g.setColor(new Color(active ? 0x16ffffff : 0x06ffffff, true)); g.fill(shape);
-        var oldStroke = g.getStroke(); g.setStroke(new BasicStroke(1));
-        g.setColor(new Color(active ? 0xa0ffffff : 0x45ffffff, true)); g.draw(shape); g.setStroke(oldStroke);
+        g.setColor(new Color(active ? 0x24ffffff : 0x0cffffff, true)); g.fill(shape);
     }
     public void cover(BufferedImage cover, double x, double y, int size, int seed) {
         var clip = g.getClip(); g.clip(new RoundRectangle2D.Double(x, y, size, size, Math.min(18, size / 4.0), Math.min(18, size / 4.0)));

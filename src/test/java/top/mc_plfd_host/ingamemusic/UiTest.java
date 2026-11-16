@@ -79,6 +79,47 @@ class UiTest {
     private static List<String> labels(Canvas.Scene scene) {
         return scene.commands().stream().filter(c -> c instanceof Canvas.Label).map(c -> ((Canvas.Label) c).text()).toList();
     }
+    @Test void responsiveLayoutKeepsListsSlidersAndCenteredDialogsInteractive() throws Exception {
+        try (var app = new MusicController(home); var covers = new CoverCache()) {
+            var tracks = new ArrayList<Track>();
+            for (int i = 0; i < 30; i++) tracks.add(new Track(home.resolve(i + ".opus").toString(), "track-" + i, "艺术家", "作曲人", "专辑", 180, "", 0));
+            app.library.upsert(tracks); app.refresh();
+            var view = new MusicView(app, covers, new Host());
+            for (int[] size : new int[][]{{1280, 720}, {1680, 720}, {1120, 840}}) {
+                int width = size[0], height = size[1];
+                view.resize(width, height);
+                var scene = view.scene(0, 0);
+                assertEquals(width, scene.width()); assertEquals(height, scene.height());
+                var list = scene.commands().stream().filter(c -> c instanceof Canvas.Clip clip && clip.x() == 236 && clip.y() == 208)
+                        .map(Canvas.Clip.class::cast).findFirst().orElseThrow();
+                assertEquals(height - 134, list.y() + list.h());
+                view.click(width - 400, 50, 0, 0);
+                assertEquals(width - 550, view.focusedInput().x());
+                view.key(GLFW_KEY_ESCAPE, 0);
+                view.click(width - 267, height - 53, 0, 0); view.release(width - 267, height - 53);
+                assertEquals(.5, app.player.volume(), .001);
+                view.click(list.x() + list.w() - 20, 230, 0, 0); view.key(GLFW_KEY_F2, 0);
+                view.scene(0, 0);
+                assertNotNull(view.focusedInput());
+                assertEquals(width / 2, view.focusedInput().x() + view.focusedInput().width() / 2);
+                view.key(GLFW_KEY_ESCAPE, 0);
+                view.scene(0, 0); view.click(list.x() + list.w() + 5, 212, 0, 0);
+                view.drag(list.x() + list.w() + 5, height);
+                assertTrue(labels(view.scene(0, 0)).contains("track-29"));
+                view.drag(list.x() + list.w() + 5, 0); view.release(0, 0);
+                app.glassStyle = GlassStyle.DEFAULT.withEnabled(true);
+                GlassSettingsTest.writeGlassPreview(view.scene(0, 0), "player-" + width + "x" + height);
+                view.click(100, 220, 0, 0); view.scene(0, 0);
+                int growth = (width - MusicView.WIDTH) * 2 / 3;
+                int sliderY = 365 + (height - MusicView.HEIGHT) / 6;
+                view.click(244, sliderY, 0, 0); view.drag(244 + (410 + growth) / 2.0, sliderY); view.release(244 + (410 + growth) / 2.0, sliderY);
+                assertEquals(12, app.glassStyle.blur());
+                GlassSettingsTest.writeGlassPreview(view.scene(0, 0), "settings-" + width + "x" + height);
+                view.click(100, 130, 0, 0);
+            }
+            view.dispose();
+        }
+    }
     @Test void longInputOnlyDrawsVisibleTextAndKeepsCaretInsideField() {
         TextEdit field = new TextEdit("中文🎵".repeat(800));
         try (Canvas canvas = new Canvas(600, 100)) {
@@ -97,14 +138,11 @@ class UiTest {
         assertEquals(0, bitmap.rgba()[0] >>> 24); assertTrue(bitmap.anchorY() > 3);
         assertTrue(Arrays.stream(bitmap.rgba()).anyMatch(p -> (p >>> 24) > 200));
     }
-    @Test void lightMaterialIsOpaqueWithOnlyASubtleGradient() {
+    @Test void lightMaterialIsOpaque() {
         var bitmap = SpriteRasterizer.render(new SpriteRasterizer.Key("glass", "", 240, 100, 18, Canvas.PANEL, 0, null, 0));
         assertEquals(0, bitmap.rgba()[0] >>> 24);
         int alpha = bitmap.rgba()[50 * 240 + 120] >>> 24;
         assertEquals(255, alpha);
-        int top = bitmap.rgba()[20 * 240 + 120], bottom = bitmap.rgba()[80 * 240 + 120];
-        assertNotEquals(top, bottom);
-        for (int shift : new int[]{0, 8, 16}) assertTrue(Math.abs((top >> shift & 255) - (bottom >> shift & 255)) <= 5);
         try (var canvas = new Canvas(240, 100)) {
             canvas.glass(0, 0, 240, 100, 18, Canvas.PANEL);
             var image = canvas.finish().rasterize(1);
@@ -120,8 +158,10 @@ class UiTest {
             app.library.upsert(tracks); app.library.createPlaylist("旅途手记"); app.library.createPlaylist("深夜与星空"); app.refresh();
             Host host = new Host(); MusicView view = new MusicView(app, covers, host);
             Path output = Path.of("build", "previews"); Files.createDirectories(output);
-            var image = view.render(1.5, 0, 0); assertEquals(1680, image.getWidth());
+            view.resize(1280, 720);
+            var image = view.render(1.5, 0, 0); assertEquals(1920, image.getWidth());
             ImageIO.write(image, "png", output.resolve("player.png").toFile());
+            view.resize(MusicView.WIDTH, MusicView.HEIGHT); view.scene(0, 0);
             view.click(410, 230, 0, 0); view.render(1, 0, 0);
             view.key(GLFW_KEY_DELETE, 0);
             ImageIO.write(view.render(1.5, 0, 0), "png", output.resolve("delete-confirmation.png").toFile());
@@ -145,6 +185,7 @@ class UiTest {
                 assertNotNull(covers.get(track, true));
             }
             view.scene(0, 0); view.click(100, 130, 0, 0); view.scene(0, 0); view.click(410, 230, 0, 0);
+            view.resize(1280, 720);
             ImageIO.write(view.render(1.5, 0, 0), "png", output.resolve("player-generated.png").toFile());
             view.dispose();
         }

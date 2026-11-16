@@ -27,6 +27,12 @@
 
 测试报告位于 `build/reports/tests/test/index.html`，界面预览输出到 `build/previews/`。
 
+## 玻璃渲染
+
+玻璃采用平坦中央区域、窄边折射和独立轮廓高光，不对整个面板做凸透镜放大。设计调研参考 [Liquid Glass React](https://github.com/rdev/liquid-glass-react)、[Shu Ding 的 SVG 实现](https://github.com/shuding/liquid-glass) 和 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)。项目保留自己的 GLSL 渲染路径。
+
+Linux 上可以运行 `python3 tools/validate_glass_shaders.py --previews`，使用 Mesa EGL 编译并检查实际着色器，再将测试导出的界面与程序化背景合成预览。
+
 ## 可选模组接口检查
 
 可通过 Gradle 属性指定 IMBlocker 或 Simple Voice Chat JAR，运行额外的接口兼容性检查：
